@@ -1,0 +1,15 @@
+task:
+  matrix:
+    image:
+      - ubuntu-22.04
+      - windows-2022
+      - macos-ventura-base
+  install_script:
+    - if [ "$OS" = "Windows_NT" ]; then choco install ninja cmake -y; else brew install qt@6 ninja cmake || true; fi
+    - if [ "$OS" != "Windows_NT" ] && [ "$(uname)" != "Darwin" ]; then sudo apt-get update && sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-tools-dev libqt6help6 libqt6svg6-dev libqt6printsupport6; fi
+  script:
+    - if [ "$OS" = "Windows_NT" ]; then export CMAKE_PREFIX_PATH="C:/Qt/6.11.0/msvc2022_64"; fi
+    - if [ "$(uname)" = "Darwin" ]; then export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"; fi
+    - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build
+    - if [ "$OS" = "Windows_NT" ]; then test -f release/TheoQtHelper.exe; elif [ "$(uname)" = "Darwin" ]; then test -x release/TheoQtHelper.app/Contents/MacOS/TheoQtHelper || test -x release/TheoQtHelper; else test -x release/TheoQtHelper; fi
