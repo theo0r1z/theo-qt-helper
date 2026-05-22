@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "apptheme.h"
 #include "documentpane.h"
 #include "helpbrowser.h"
@@ -21,6 +21,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QHelpContentModel>
 #include <QHelpContentWidget>
 #include <QHelpEngine>
 #include <QHelpIndexModel>
@@ -368,13 +369,17 @@ void MainWindow::closeEvent(QCloseEvent *event)
 MainWindow::~MainWindow()
 {
     qApp->removeEventFilter(this);
+    delete m_dragPreview;
+    m_dragPreview = nullptr;
     delete m_helpEngine;
 }
 
 bool MainWindow::eventFilter(QObject *object, QEvent *event)
 {
-    Q_UNUSED(object);
     if (event->type() == QEvent::MouseButtonRelease) {
+        QWidget *widget = qobject_cast<QWidget *>(object);
+        if (!widget || (widget != this && !isAncestorOf(widget)))
+            return QMainWindow::eventFilter(object, event);
         QMouseEvent *mouse = static_cast<QMouseEvent *>(event);
         if (mouse->button() == Qt::BackButton && m_backAction && m_backAction->isEnabled()) {
             m_backAction->trigger();
@@ -453,7 +458,9 @@ void MainWindow::createHelpEngine()
     QString qchPath = resolveBundledQchPath(collectionPath);
     const QFileInfo collectionInfo(collectionPath);
     const QFileInfo qchInfo(qchPath);
-    const bool bundledCollection = collectionPath.endsWith(QStringLiteral("docs/qt-zh.qhc"));
+    const QString normalizedCollection = QDir::fromNativeSeparators(collectionPath);
+    const bool bundledCollection = normalizedCollection.endsWith(QStringLiteral("/docs/qt-zh.qhc"))
+        || normalizedCollection.endsWith(QStringLiteral("/docs/qt-6.11/qt-zh.qhc"));
     if (!bundledCollection && collectionInfo.exists() && (collectionInfo.size() == 0 || (qchInfo.exists() && qchInfo.lastModified() > collectionInfo.lastModified())))
         QFile::remove(collectionPath);
 
@@ -466,8 +473,10 @@ void MainWindow::createHelpEngine()
             QFile::remove(collectionPath);
         m_helpEngine = new QHelpEngine(collectionPath);
         m_helpEngine->setUsesFilterEngine(false);
-        if (!m_helpEngine->setupData())
+        if (!m_helpEngine->setupData()) {
             QMessageBox::warning(this, QStringLiteral("Help database error"), firstError + QLatin1Char('\n') + m_helpEngine->error());
+            return;
+        }
     }
 
     if (qchPath.isEmpty()) {
@@ -480,9 +489,12 @@ void MainWindow::createHelpEngine()
                 QMessageBox::warning(this, tr("注册文档失败"), m_helpEngine->error());
         }
     }
-    m_helpEngine->contentModel()->createContentsForCurrentFilter();
-    m_helpEngine->indexModel()->createIndexForCurrentFilter();
-    m_helpEngine->searchEngine()->scheduleIndexDocumentation();
+    if (QHelpContentModel *contentModel = m_helpEngine->contentModel())
+        contentModel->createContentsForCurrentFilter();
+    if (QHelpIndexModel *indexModel = m_helpEngine->indexModel())
+        indexModel->createIndexForCurrentFilter();
+    if (QHelpSearchEngine *searchEngine = m_helpEngine->searchEngine())
+        searchEngine->scheduleIndexDocumentation();
 
     if (QSettings().value(QStringLiteral("currentDocCollection")).toString().isEmpty()) {
         const QString bundled = QCoreApplication::applicationDirPath() + QStringLiteral("/docs/qt-6.11/qt-zh.qhc");
@@ -1625,6 +1637,7 @@ void MainWindow::createCentralArea()
     setActivePane(pane);
     collectDocumentPanes(m_panes);
 
+    delete m_dropOverlay;
     m_dropOverlay = new SplitDropOverlay(this);
     m_dropOverlay->hide();
     updateDropOverlayGeometry();
@@ -2520,7 +2533,11 @@ void MainWindow::reloadHelpDocumentation(const QString &collectionPath)
     delete m_helpEngine;
     m_helpEngine = nullptr;
 
-    if (QDockWidget *dock = findChild<QDockWidget *>(QStringLiteral("navigationDock"))) {
+    if (m_navigationDock) {
+        removeDockWidget(m_navigationDock);
+        delete m_navigationDock;
+        m_navigationDock = nullptr;
+    } else if (QDockWidget *dock = findChild<QDockWidget *>(QStringLiteral("navigationDock"))) {
         removeDockWidget(dock);
         delete dock;
     }
@@ -2531,7 +2548,12 @@ void MainWindow::reloadHelpDocumentation(const QString &collectionPath)
     m_bookmarks = nullptr;
     m_openPages = nullptr;
 
+    delete m_dropOverlay;
+    m_dropOverlay = nullptr;
+
     createHelpEngine();
+    if (!m_helpEngine)
+        return;
     createDock();
     createCentralArea();
 

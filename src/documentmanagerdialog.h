@@ -7,6 +7,7 @@ class QLabel;
 class QListWidget;
 class QTextEdit;
 class QNetworkAccessManager;
+class QNetworkReply;
 
 class DocumentManagerDialog : public QDialog
 {
@@ -42,6 +43,7 @@ private:
     QListWidget *m_remote = nullptr;
     QTextEdit *m_log = nullptr;
     QNetworkAccessManager *m_network = nullptr;
+    QNetworkReply *m_remoteReply = nullptr;
     QProcess *m_process = nullptr;
     QStringList m_remoteVersions;
 };

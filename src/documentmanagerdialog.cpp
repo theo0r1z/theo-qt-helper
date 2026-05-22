@@ -185,12 +185,21 @@ void DocumentManagerDialog::refreshCatalog()
 
 void DocumentManagerDialog::refreshRemote()
 {
+    if (m_remoteReply) {
+        m_remoteReply->abort();
+        m_remoteReply->deleteLater();
+        m_remoteReply = nullptr;
+    }
     m_remote->clear();
     m_log->append(tr("正在读取官方版本列表..."));
     QNetworkRequest request(QUrl(QStringLiteral("https://doc.qt.io/qt.html")));
     request.setTransferTimeout(15000);
-    QNetworkReply *reply = m_network->get(request);
+    m_remoteReply = m_network->get(request);
+    QNetworkReply *reply = m_remoteReply;
     connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        if (reply != m_remoteReply)
+            return;
+        m_remoteReply = nullptr;
         if (reply->error() != QNetworkReply::NoError) {
             m_log->append(tr("联网失败：%1").arg(reply->errorString()));
             reply->deleteLater();
