@@ -11,6 +11,8 @@
 
 Theo Qt Helper is a cross-platform desktop application for browsing **Qt 6 Simplified Chinese** API documentation offline. Built with Qt 6 and CMake, it provides an Assistant-style workflow: table of contents, index, full-text search, bookmarks, and a multi-pane tabbed layout for reading and comparing topics.
 
+**Keywords:** Qt help documentation · Qt offline docs · Qt Chinese API docs · Qt Assistant alternative · `.qch` / `.qhc` viewer · 简体中文 Qt 文档
+
 | | |
 |---|---|
 | **Repository** | https://github.com/theo0r1z/theo-qt-helper |
@@ -136,6 +138,8 @@ Copyright © 2025 Theo Zhao. Released under the [MIT License](LICENSE).
 [English](#theo-qt-helper)
 
 **Theo Qt Helper** 是一款跨平台 **Qt 6 简体中文版 API 文档** 离线阅读器，基于 Qt 6 与 CMake 构建。提供接近 Qt Assistant 的使用体验：目录、索引、全文检索、书签，以及多分栏标签页布局，便于对照阅读。
+
+**关键词：** Qt 帮助文档 · Qt 中文帮助文档 · Qt 离线文档 · Qt 中文 API · Qt Assistant 替代 · `.qch` / `.qhc` 阅读器
 
 | | |
 |---|---|
