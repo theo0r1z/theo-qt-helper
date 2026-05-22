@@ -1,6 +1,5 @@
 # Theo Qt Helper
 
-[![CI](https://github.com/theo0r1z/theo-qt-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/theo0r1z/theo-qt-helper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/theo0r1z/theo-qt-helper?label=release)](https://github.com/theo0r1z/theo-qt-helper/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](#building-from-source)
