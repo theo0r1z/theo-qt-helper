@@ -13,11 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.3"
+          version: "6.6.3"
           host: linux
           target: desktop
           arch: gcc_64
-          archives: qtbase qtsvg qthelp
+          modules: qttools qtsvg
           cache: true
       - name: Build
         run: |
@@ -40,11 +40,11 @@ jobs:
           Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\python3.exe" -Force -ErrorAction SilentlyContinue
       - uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.3"
+          version: "6.6.3"
           host: windows
           target: desktop
-          arch: win64_msvc2022_64
-          archives: qtbase qtsvg qthelp
+          arch: win64_msvc2019_64
+          modules: qttools qtsvg
           cache: true
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Install Ninja
@@ -62,19 +62,12 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.7.3"
-          host: mac
-          target: desktop
-          arch: clang_64
-          archives: qtbase qtsvg qthelp
-          cache: true
+      - name: Install dependencies
+        run: brew install qt ninja cmake
       - name: Build
         run: |
-          brew install ninja cmake
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
           cmake --build build
           test -x release/TheoQtHelper.app/Contents/MacOS/TheoQtHelper || test -x release/TheoQtHelper
