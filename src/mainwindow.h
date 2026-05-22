@@ -93,6 +93,10 @@ private:
     QUrl indexUrlForKeyword(const QString &keyword, const QHelpLink &link) const;
     QString indexDisplayText(const QString &keyword) const;
     HelpBrowser *currentBrowser() const;
+    HelpBrowser *zoomTargetBrowser() const;
+    void zoomInActivePage();
+    void zoomOutActivePage();
+    void resetZoomActivePage();
     QString computePageTitle(HelpBrowser *browser) const;
     QString pageTitle(HelpBrowser *browser) const;
     void updatePageTitle(HelpBrowser *browser);

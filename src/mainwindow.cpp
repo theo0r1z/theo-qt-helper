@@ -566,12 +566,9 @@ void MainWindow::createActions()
             closePage(pane->currentTabIndex());
     });
     connect(m_clearPagesAction, &QAction::triggered, this, &MainWindow::clearOpenPages);
-    connect(m_zoomInAction, &QAction::triggered, this, [this] { if (currentBrowser()) currentBrowser()->zoomIn(); });
-    connect(m_zoomOutAction, &QAction::triggered, this, [this] { if (currentBrowser()) currentBrowser()->zoomOut(); });
-    connect(m_resetZoomAction, &QAction::triggered, this, [this] {
-        if (currentBrowser())
-            currentBrowser()->resetZoom();
-    });
+    connect(m_zoomInAction, &QAction::triggered, this, &MainWindow::zoomInActivePage);
+    connect(m_zoomOutAction, &QAction::triggered, this, &MainWindow::zoomOutActivePage);
+    connect(m_resetZoomAction, &QAction::triggered, this, &MainWindow::resetZoomActivePage);
     connect(m_pinAction, &QAction::toggled, this, &MainWindow::applyPinned);
     connect(m_toggleNavigationAction, &QAction::toggled, this, &MainWindow::applyNavigationVisible);
 }
@@ -1893,6 +1890,57 @@ HelpBrowser *MainWindow::currentBrowser() const
     return pane ? pane->currentBrowser() : nullptr;
 }
 
+HelpBrowser *MainWindow::zoomTargetBrowser() const
+{
+    QWidget *w = QApplication::focusWidget();
+    while (w) {
+        if (auto *browser = qobject_cast<HelpBrowser *>(w))
+            return browser;
+        w = w->parentWidget();
+    }
+    return currentBrowser();
+}
+
+void MainWindow::zoomInActivePage()
+{
+    HelpBrowser *browser = zoomTargetBrowser();
+    if (!browser) {
+        statusBar()->showMessage(tr("请先打开文档页面"), 2500);
+        return;
+    }
+    if (DocumentPane *pane = browser->ownerPane())
+        setActivePane(pane);
+    const int before = browser->zoomPercent();
+    browser->zoomIn();
+    if (browser->zoomPercent() == before)
+        statusBar()->showMessage(tr("已达到最大缩放 (220%)"), 2000);
+}
+
+void MainWindow::zoomOutActivePage()
+{
+    HelpBrowser *browser = zoomTargetBrowser();
+    if (!browser) {
+        statusBar()->showMessage(tr("请先打开文档页面"), 2500);
+        return;
+    }
+    if (DocumentPane *pane = browser->ownerPane())
+        setActivePane(pane);
+    const int before = browser->zoomPercent();
+    browser->zoomOut();
+    if (browser->zoomPercent() == before)
+        statusBar()->showMessage(tr("已达到最小缩放 (60%)"), 2000);
+}
+
+void MainWindow::resetZoomActivePage()
+{
+    HelpBrowser *browser = zoomTargetBrowser();
+    if (!browser) {
+        statusBar()->showMessage(tr("请先打开文档页面"), 2500);
+        return;
+    }
+    browser->resetZoom();
+}
+
 static bool isNoisePageTitle(const QString &title)
 {
     return title.isEmpty() || title == QStringLiteral("在本页") || title == QStringLiteral("在本页中")
@@ -2281,6 +2329,12 @@ void MainWindow::updateChromeState()
     DocumentPane *pane = activePane();
     m_closePageAction->setEnabled(pane && pane->tabWidget()->count() > 0);
     m_clearPagesAction->setEnabled(hasBrowser);
+    if (m_zoomInAction)
+        m_zoomInAction->setEnabled(!hasBrowser || browser->canZoomIn());
+    if (m_zoomOutAction)
+        m_zoomOutAction->setEnabled(!hasBrowser || browser->canZoomOut());
+    if (m_resetZoomAction)
+        m_resetZoomAction->setEnabled(hasBrowser);
     if (hasBrowser) {
         const QString title = pageTitle(browser);
         setWindowTitle(title + tr(" - Theo Qt Helper"));

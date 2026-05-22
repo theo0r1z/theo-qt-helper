@@ -16,6 +16,7 @@
 #include <QTextCursor>
 #include <QTimer>
 #include <QHash>
+#include <QWheelEvent>
 
 namespace {
 
@@ -38,6 +39,17 @@ struct DocRenderCache {
 
     bool contains(const QString &key) const { return entries.contains(key); }
     QByteArray value(const QString &key) const { return entries.value(key); }
+
+    void invalidatePathPrefix(const QString &pathPrefix)
+    {
+        QStringList keys;
+        for (auto it = entries.cbegin(); it != entries.cend(); ++it) {
+            if (it.key().startsWith(pathPrefix))
+                keys.append(it.key());
+        }
+        for (const QString &key : keys)
+            entries.remove(key);
+    }
 };
 
 DocRenderCache &renderCache()
@@ -70,6 +82,10 @@ HelpBrowser::HelpBrowser(QHelpEngineCore *helpEngine, QWidget *parent)
     document()->setDefaultStyleSheet(documentStyle());
     document()->setDefaultTextOption(QTextOption(Qt::AlignLeft));
     applyScrollBarStyle();
+    connect(this, &QTextBrowser::sourceChanged, this, [this](const QUrl &url) {
+        if (m_zoomReloadPending && url.isValid())
+            finishZoomReload();
+    });
 }
 
 void HelpBrowser::applyScrollBarStyle()
@@ -92,30 +108,72 @@ void HelpBrowser::refreshStyle()
     applyZoomStyle();
 }
 
+void HelpBrowser::invalidateRenderCacheForSource(const QUrl &url)
+{
+    if (!url.isValid())
+        return;
+    renderCache().invalidatePathPrefix(url.path() + QLatin1Char('|'));
+}
+
+void HelpBrowser::restoreScrollAfterZoom()
+{
+    QScrollBar *bar = verticalScrollBar();
+    const int viewHalf = m_zoomScrollViewHalf > 0 ? m_zoomScrollViewHalf
+                                                  : (viewport() ? viewport()->height() / 2 : 0);
+    if (bar) {
+        const qreal scale = m_zoomScrollOldPercent > 0
+            ? qreal(m_zoomPercent) / qreal(m_zoomScrollOldPercent)
+            : 1.0;
+        const int newCenter = qRound(qreal(m_zoomScrollAnchorY) * scale);
+        bar->setValue(qBound(0, newCenter - viewHalf, bar->maximum()));
+    }
+    if (!m_zoomScrollFragment.isEmpty())
+        scrollToIndexAnchor(m_zoomScrollFragment);
+}
+
+void HelpBrowser::finishZoomReload()
+{
+    m_zoomReloadPending = false;
+    m_lastAppliedZoomPercent = m_zoomPercent;
+    QTimer::singleShot(0, this, [this] { restoreScrollAfterZoom(); });
+    if (m_zoomReapplyAfterLoad) {
+        m_zoomReapplyAfterLoad = false;
+        if (m_zoomPercent != m_lastAppliedZoomPercent)
+            applyZoomStyle();
+    }
+}
+
 void HelpBrowser::applyZoomStyle()
 {
-    const int oldZoom = m_lastAppliedZoomPercent > 0 ? m_lastAppliedZoomPercent : m_zoomPercent;
-    QScrollBar *bar = verticalScrollBar();
-    const int viewHalf = viewport() ? viewport()->height() / 2 : 0;
-    const int anchorDocY = bar ? bar->value() + viewHalf : 0;
-    const QUrl current = source();
-    const QString fragment = current.fragment();
+    if (m_zoomPercent == m_lastAppliedZoomPercent)
+        return;
+
     document()->setDefaultStyleSheet(documentStyle());
+
+    const QUrl current = source();
     if (!current.isValid()) {
         m_lastAppliedZoomPercent = m_zoomPercent;
         return;
     }
+
+    if (m_zoomReloadPending) {
+        m_zoomReapplyAfterLoad = true;
+        return;
+    }
+
+    QScrollBar *bar = verticalScrollBar();
+    m_zoomScrollViewHalf = viewport() ? viewport()->height() / 2 : 0;
+    m_zoomScrollAnchorY = bar ? bar->value() + m_zoomScrollViewHalf : 0;
+    m_zoomScrollOldPercent = m_lastAppliedZoomPercent > 0 ? m_lastAppliedZoomPercent : m_zoomPercent;
+    m_zoomScrollFragment = current.fragment();
+
+    invalidateRenderCacheForSource(current);
+    m_zoomReloadPending = true;
     reload();
-    QTimer::singleShot(0, this, [this, oldZoom, anchorDocY, viewHalf, fragment] {
-        if (QScrollBar *bar = verticalScrollBar()) {
-            const qreal scale = oldZoom > 0 ? qreal(m_zoomPercent) / qreal(oldZoom) : 1.0;
-            const int newCenter = qRound(qreal(anchorDocY) * scale);
-            bar->setValue(qBound(0, newCenter - viewHalf, bar->maximum()));
-        }
-        if (!fragment.isEmpty())
-            scrollToIndexAnchor(fragment);
+    QTimer::singleShot(400, this, [this] {
+        if (m_zoomReloadPending)
+            finishZoomReload();
     });
-    m_lastAppliedZoomPercent = m_zoomPercent;
 }
 
 void HelpBrowser::zoomIn(int range)
@@ -337,6 +395,20 @@ void HelpBrowser::contextMenuEvent(QContextMenuEvent *event)
     event->accept();
     if (chosen == openTabAction)
         requestNavigation(linkUrl, NavMode::NewTab);
+}
+
+void HelpBrowser::wheelEvent(QWheelEvent *event)
+{
+    if (event->modifiers() & Qt::ControlModifier) {
+        const QPoint delta = event->angleDelta().y() != 0 ? event->angleDelta() : event->pixelDelta();
+        if (delta.y() > 0)
+            zoomIn();
+        else if (delta.y() < 0)
+            zoomOut();
+        event->accept();
+        return;
+    }
+    QTextBrowser::wheelEvent(event);
 }
 
 void HelpBrowser::mouseReleaseEvent(QMouseEvent *event)
