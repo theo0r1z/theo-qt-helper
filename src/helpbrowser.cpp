@@ -356,7 +356,8 @@ HelpBrowser::HelpBrowser(QHelpEngineCore *helpEngine, QWidget *parent)
     setOpenLinks(false);
     setFocusPolicy(Qt::StrongFocus);
     setFrameShape(QFrame::NoFrame);
-    setReadOnly(true);
+    setTextInteractionFlags(Qt::TextBrowserInteraction);
+    setUndoRedoEnabled(false);
     document()->setDefaultStyleSheet(QString());
     document()->setDefaultTextOption(QTextOption(Qt::AlignLeft));
     applyScrollBarStyle();
@@ -770,6 +771,16 @@ void HelpBrowser::requestNavigation(const QUrl &url, NavMode mode)
     emit linkNavigateRequested(url, mode);
 }
 
+static QPoint viewportPosForEvent(QTextBrowser *browser, const QPoint &eventPos)
+{
+    if (!browser || !browser->viewport())
+        return eventPos;
+    QWidget *vp = browser->viewport();
+    if (vp->rect().contains(eventPos))
+        return eventPos;
+    return vp->mapFrom(browser, eventPos);
+}
+
 void HelpBrowser::contextMenuEvent(QContextMenuEvent *event)
 {
     const QPoint vpPos = viewport() ? viewport()->mapFrom(this, event->pos()) : event->pos();
@@ -838,21 +849,8 @@ void HelpBrowser::mousePressEvent(QMouseEvent *event)
     if (handleMouseHistoryButtons(event))
         return;
     if (event->button() == Qt::LeftButton && viewport()) {
-        const QPoint vpPos = viewport()->mapFrom(this, event->pos());
-        m_pressLinkUrl = linkAtViewportPos(vpPos);
-        if (!m_pressLinkUrl.isValid()) {
-            QScrollBar *bar = verticalScrollBar();
-            const int savedScroll = bar ? bar->value() : 0;
-            if (textCursor().hasSelection()) {
-                QTextCursor c = cursorForPosition(vpPos);
-                c.clearSelection();
-                setTextCursor(c);
-                if (bar)
-                    bar->setValue(savedScroll);
-            }
-            event->accept();
-            return;
-        }
+        m_pressPos = event->pos();
+        m_pressLinkUrl = linkAtViewportPos(viewportPosForEvent(this, event->pos()));
     } else {
         m_pressLinkUrl = QUrl();
     }
@@ -863,21 +861,18 @@ void HelpBrowser::mouseReleaseEvent(QMouseEvent *event)
 {
     if (handleMouseHistoryButtons(event))
         return;
-    if (event->button() == Qt::LeftButton && viewport()) {
-        const QPoint vpPos = viewport()->mapFrom(this, event->pos());
-        const QUrl releaseLink = linkAtViewportPos(vpPos);
-        const QUrl linkUrl = m_pressLinkUrl.isValid() && m_pressLinkUrl == releaseLink ? releaseLink : QUrl();
-        m_pressLinkUrl = QUrl();
-        if (linkUrl.isValid()) {
-            const bool newTab = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
-            requestNavigation(linkUrl, newTab ? NavMode::NewTab : NavMode::SameTab);
-            event->accept();
-            return;
-        }
-        event->accept();
-        return;
-    }
     QTextBrowser::mouseReleaseEvent(event);
+    if (event->button() != Qt::LeftButton || !viewport())
+        return;
+    if ((event->pos() - m_pressPos).manhattanLength() > 4)
+        return;
+    const QUrl releaseLink = linkAtViewportPos(viewportPosForEvent(this, event->pos()));
+    const QUrl linkUrl = m_pressLinkUrl.isValid() && m_pressLinkUrl == releaseLink ? releaseLink : QUrl();
+    m_pressLinkUrl = QUrl();
+    if (!linkUrl.isValid())
+        return;
+    const bool newTab = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
+    requestNavigation(linkUrl, newTab ? NavMode::NewTab : NavMode::SameTab);
 }
 
 QUrl HelpBrowser::resolveLink(const QUrl &name) const

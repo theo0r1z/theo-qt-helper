@@ -100,5 +100,6 @@ protected:
     QList<NavEntry> m_pageHistory;
     int m_historyIndex = -1;
     bool m_restoringHistory = false;
+    QPoint m_pressPos;
     QUrl m_pressLinkUrl;
 };
